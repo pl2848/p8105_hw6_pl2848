@@ -9,7 +9,30 @@ output: html_document
 # Loaded the library
 library(tidyverse)
 library(dplyr)
+library(viridis)
+library(viridisLite)
+library(glmnet)
+library(Matrix)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
+
 
 
 
@@ -17,8 +40,57 @@ Problem 2
 ```{r}
 # read the data
 homicide = read_csv("data/homicide-data.csv") %>% 
-  mutate(city_state = )
+  mutate(city_state = str_c(city, ", ", state),
+         solve_status = as.numeric(disposition == "Closed by arrest"),
+         victim_age = as.numeric(victim_age),
+         victim_sex = as.factor(victim_sex)) %>% 
+  filter(city_state != c("Dallas, TX", "Phoenix, AZ",  "Kansas City, MO", "Tulsa, AL"), 
+         victim_race %in% c("White", "Black")) 
 
 homicide
+```
+
+
+```{r}
+fit_logistic_MD = 
+  homicide %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  glm(solve_status ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) %>% 
+  broom::tidy() %>% 
+  mutate(OR = exp(estimate),
+         lower_ci = OR - std.error*1.96,
+         upper_ci = OR + std.error*1.96) %>%
+  select(term, log_OR = estimate, OR, p.value,lower_ci, upper_ci) %>% 
+  filter(term == "victim_sexMale") %>% 
+  knitr::kable(digits = 3) 
+
+fit_logistic_MD
+```
+
+```{r}
+fit_logistic = function(x) {
+  
+  result = homicide %>% 
+  filter(city_state == x) %>% 
+  glm(solve_status ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) %>% 
+  broom::tidy() %>% 
+  mutate(OR = exp(estimate),
+         lower_ci = OR - std.error*1.96,
+         upper_ci = OR + std.error*1.96) %>%
+  select(term, log_OR = estimate, OR, p.value,lower_ci, upper_ci) %>% 
+  filter(term == "victim_sexMale") 
+  
+  result
+  }
+  
+fit_logistic("Atlanta, GA")
+
+
+city_state = unique(homicide$city_state)
+purrr::map(city_state, fit_logistic)
+odds_city_state = tibble(city_state = unique(homicide$city_state),
+                         model = purrr::map(city_state, fit_logistic)) 
+  
+odds_city_state
 ```
 
