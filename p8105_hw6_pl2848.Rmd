@@ -1,0 +1,24 @@
+---
+title: "p8105_hw6_pl2848"
+author: "Pei Liu"
+date: "2022-12-01"
+output: html_document
+---
+
+```{r}
+# Loaded the library
+library(tidyverse)
+library(dplyr)
+```
+
+
+
+Problem 2
+```{r}
+# read the data
+homicide = read_csv("data/homicide-data.csv") %>% 
+  mutate(city_state = )
+
+homicide
+```
+
