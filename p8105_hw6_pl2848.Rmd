@@ -41,11 +41,11 @@ Problem 2
 # read the data
 homicide = read_csv("data/homicide-data.csv") %>% 
   mutate(city_state = str_c(city, ", ", state),
-         solve_status = as.numeric(disposition == "Closed by arrest"),
-         victim_age = as.numeric(victim_age),
-         victim_sex = as.factor(victim_sex)) %>% 
-  filter(city_state != c("Dallas, TX", "Phoenix, AZ",  "Kansas City, MO", "Tulsa, AL"), 
-         victim_race %in% c("White", "Black")) 
+         solve_status = as.factor(ifelse(disposition == "Closed by arrest", 1, 0)),
+         victim_age = as.numeric(victim_age)) %>% 
+  filter(city_state != c("Dallas, TX", "Phoenix, AZ",  "Kansas City, MO", "Tulsa, AL") &
+         victim_race == "White" | victim_race =="Black") %>% 
+  drop_na()
 
 homicide
 ```
@@ -60,9 +60,10 @@ fit_logistic_MD =
   mutate(OR = exp(estimate),
          lower_ci = OR - std.error*1.96,
          upper_ci = OR + std.error*1.96) %>%
-  select(term, log_OR = estimate, OR, p.value,lower_ci, upper_ci) %>% 
+  select(term, OR, lower_ci, upper_ci) %>% 
   filter(term == "victim_sexMale") %>% 
   knitr::kable(digits = 3) 
+
 
 fit_logistic_MD
 ```
@@ -86,11 +87,16 @@ fit_logistic = function(x) {
 fit_logistic("Atlanta, GA")
 
 
-city_state = unique(homicide$city_state)
-purrr::map(city_state, fit_logistic)
 odds_city_state = tibble(city_state = unique(homicide$city_state),
-                         model = purrr::map(city_state, fit_logistic)) 
+                         model = map(unique(homicide$city_state), fit_logistic)) %>% 
+  unnest()
   
 odds_city_state
+```
+
+
+# Problem 3
+```{r}
+
 ```
 
