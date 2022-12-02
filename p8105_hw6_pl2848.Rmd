@@ -16,6 +16,7 @@ library(modelr)
 library(ggplot2)
 library(forcats)
 library(corrplot)
+library(mgcv)
 
 knitr::opts_chunk$set(
 	echo = TRUE,
@@ -172,7 +173,8 @@ mult.fit = lm(bwt ~ ., data = brw_clean)
 summary(mult.fit)
 ```
 
-Then, the idea is to take out non-significant variables one at a time starting with the highest p-value. Here, I use one function to help me to do it.
+Then, the idea is to take out non-significant variables one at a time starting with the highest p-value. Here, I use one function to help me to do it. I think the best_mlr makes sense, because the variables that have low correlations are excluded and the remaining variables are all reasonable and could have potential effect to body weight. So I decided to use the result from backwards elimination as my prediction model.
+
 ```{r}
 # The best model using backward elimination
 best_mlr = step(mult.fit, direction='backward')
@@ -187,10 +189,25 @@ backward_selection
 show a plot of model residuals against fitted values - use add_predictions and add_residuals in making this plot.
 ```{r}
 # Create the dataset for the plot
-birth_weight_prediction = brw_clean %>% 
+residual_plot = brw_clean %>% 
   modelr::add_predictions(best_mlr)  %>% 
-  modelr::add_residuals(best_mlr)
+  modelr::add_residuals(best_mlr) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() +
+  labs(
+    title = "Model residuals vs fitted values",
+    x = "Fitted Value",
+    y = "Residuals"
+  )
+
+residual_plot
 ```
 
 
+```{r}
+# One using length at birth and gestational age as predictors (main effects only)
+model1 = lm(btw ~ blength + gaweeks, data = brw_clean)
+# One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+model2 = lm(btw ~ bhead + blength + babysex , data = brw_clean)
+```
 
