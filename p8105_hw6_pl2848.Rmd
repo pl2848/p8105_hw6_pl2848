@@ -12,7 +12,9 @@ library(dplyr)
 library(viridis)
 library(viridisLite)
 library(glmnet)
-library(Matrix)
+library(modelr)
+library(ggplot2)
+library(forcats)
 
 knitr::opts_chunk$set(
 	echo = TRUE,
@@ -40,21 +42,24 @@ Problem 2
 ```{r}
 # read the data
 homicide = read_csv("data/homicide-data.csv") %>% 
+  janitor::clean_names() %>% 
   mutate(city_state = str_c(city, ", ", state),
          solve_status = as.factor(ifelse(disposition == "Closed by arrest", 1, 0)),
          victim_age = as.numeric(victim_age)) %>% 
-  filter(city_state != c("Dallas, TX", "Phoenix, AZ",  "Kansas City, MO", "Tulsa, AL") &
-         victim_race == "White" | victim_race =="Black") %>% 
+  filter(!city_state %in% c("Dallas, TX", "Phoenix, AZ",  "Kansas City, MO", "Tulsa, AL") &
+           victim_sex != "Unknown" &
+         victim_race %in% c("White" ,"Black"))%>% 
   drop_na()
 
 homicide
 ```
 
-
+Obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed, stored the result in fit_logistic_MD.
 ```{r}
 fit_logistic_MD = 
   homicide %>% 
   filter(city_state == "Baltimore, MD") %>% 
+  mutate(victim_sex = as.factor(victim_sex)) %>% 
   glm(solve_status ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) %>% 
   broom::tidy() %>% 
   mutate(OR = exp(estimate),
@@ -68,35 +73,85 @@ fit_logistic_MD =
 fit_logistic_MD
 ```
 
+
 ```{r}
-fit_logistic = function(x) {
+# Build a function to do logistic regression and return the result
+fit_logistic = function(citystate) {
   
   result = homicide %>% 
-  filter(city_state == x) %>% 
+  filter(city_state == citystate) %>% 
   glm(solve_status ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) %>% 
   broom::tidy() %>% 
   mutate(OR = exp(estimate),
-         lower_ci = OR - std.error*1.96,
-         upper_ci = OR + std.error*1.96) %>%
-  select(term, log_OR = estimate, OR, p.value,lower_ci, upper_ci) %>% 
-  filter(term == "victim_sexMale") 
+         lower_ci = exp(estimate - std.error*1.96),
+         upper_ci = exp(estimate + std.error*1.96)) %>%
+  select(term, OR, lower_ci, upper_ci) %>% 
+    filter(term == "victim_sexMale")
   
-  result
+  return(result)
+
   }
-  
-fit_logistic("Atlanta, GA")
-
-
-odds_city_state = tibble(city_state = unique(homicide$city_state),
-                         model = map(unique(homicide$city_state), fit_logistic)) %>% 
+ 
+# Apply the function to each city state
+logistic_reg_city_state = tibble(city_state = unique(homicide$city_state),
+       result = map(city_state, fit_logistic)) %>% 
   unnest()
-  
-odds_city_state
+
+
+logistic_reg_city_state
+```
+
+Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
+```{r}
+# Created the boxplot of estimated OR and its 95% CI 
+plot1 = logistic_reg_city_state %>% 
+  mutate(city_state = fct_reorder(city_state, OR)) %>% 
+  ggplot(aes(x = city_state, y = OR))+ 
+  geom_point(alpha = .5) +
+  geom_boxplot() + 
+  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci), width = 0.8) +
+  labs(
+    title = "Adjusted OR and 95% CI for solving homicides comparing male victims to female victims",
+    x = "City, State",
+    y = "Adjusted OR with 95% CI"
+  ) +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+# We can see that New York, NY has the lowest the odds ratio for solving homicides comparing male victims to female victims, while Albuquerque, NM has the highet (hoding other variables fixed). The confidence interval for the city states with higher ORs are larger compared with some cities with small ORs.
+plot1
 ```
 
 
 # Problem 3
 ```{r}
+# Import the data
+birthweight = read_csv("data/birthweight.csv") 
 
+birthweight
+summary(birthweight)
+
+```
+
+
+```{r}
+cor_matrix =  round(cor(birthweight),2)
+
+# Get lower triangle of the correlation matrix
+  get_lower_tri<-function(cor_matrix){
+    cor_matrix[upper.tri(cor_matrix)] <- NA
+    return(cor_matrix)
+  }
+  
+lower_tri <- get_lower_tri(cor_matrix)
+  
+library(reshape2)
+melted_cormat <- melt(lower_tri, na.rm = TRUE)
+
+ggheatmap <- ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value))  +
+   geom_tile(color = "white")+
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 12, hjust = 1))
 ```
 
