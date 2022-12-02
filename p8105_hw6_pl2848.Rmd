@@ -15,6 +15,7 @@ library(glmnet)
 library(modelr)
 library(ggplot2)
 library(forcats)
+library(corrplot)
 
 knitr::opts_chunk$set(
 	echo = TRUE,
@@ -129,29 +130,67 @@ plot1
 birthweight = read_csv("data/birthweight.csv") 
 
 birthweight
-summary(birthweight)
-
 ```
 
 
 ```{r}
-cor_matrix =  round(cor(birthweight),2)
-
-# Get lower triangle of the correlation matrix
-  get_lower_tri<-function(cor_matrix){
-    cor_matrix[upper.tri(cor_matrix)] <- NA
-    return(cor_matrix)
-  }
-  
-lower_tri <- get_lower_tri(cor_matrix)
-  
-library(reshape2)
-melted_cormat <- melt(lower_tri, na.rm = TRUE)
-
-ggheatmap <- ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value))  +
-   geom_tile(color = "white")+
-  theme_minimal()+ # minimal theme
- theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-    size = 12, hjust = 1))
+# Check missing values, there is no missing value for every column.
+colSums(is.na(birthweight))
+# check unique values for each columns. For pnumlbw and pnumsga, we only have one unique value 0, so there is no need to include these variables into our model.
+apply(birthweight, 2, function(x) length(unique(x)))
+unique(birthweight$pnumlbw)
+unique(birthweight$pnumsga)
 ```
+
+To determine which variables should be included into my regression model, I make the corelation matrix and displayed it via heat map.
+```{r}
+# correlation plot. Deleted two variables that only have one unique value.
+correlation_plot = birthweight %>% 
+  select(-pnumlbw, -pnumsga) %>% 
+  cor() %>% 
+  corrplot(type = "upper", diag = FALSE)
+
+correlation_plot
+```
+
+According to the heat map, the variables that have relatively high correlation to bwt are: blength, bhead, gaweeks. 
+
+Since I want to use a mlr model and our x is less than 20 (not that much), I can use backward elimination to get the optimal model.
+
+First, I fit regression using all variables
+```{r}
+# Prepare a clean dataset
+brw_clean = birthweight %>% 
+  select(-pnumlbw, -pnumsga) %>% 
+  mutate(babysex = as.factor(babysex),
+         frace = as.factor(frace),
+         malform = as.factor(malform),
+         mrace = as.factor(mrace))
+
+# fit regression using all predictors
+mult.fit = lm(bwt ~ ., data = brw_clean)
+summary(mult.fit)
+```
+
+Then, the idea is to take out non-significant variables one at a time starting with the highest p-value. Here, I use one function to help me to do it.
+```{r}
+# The best model using backward elimination
+best_mlr = step(mult.fit, direction='backward')
+
+# Tidy the model and display the result in dataframe
+backward_selection = best_mlr %>% 
+  broom::tidy()
+
+backward_selection
+```
+
+show a plot of model residuals against fitted values - use add_predictions and add_residuals in making this plot.
+```{r}
+# Create the dataset for the plot
+birth_weight_prediction = brw_clean %>% 
+  modelr::add_predictions(best_mlr)  %>% 
+  modelr::add_residuals(best_mlr)
+```
+
+
 
