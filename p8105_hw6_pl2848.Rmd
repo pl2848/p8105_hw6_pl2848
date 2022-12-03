@@ -65,8 +65,8 @@ fit_logistic_MD =
   glm(solve_status ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) %>% 
   broom::tidy() %>% 
   mutate(OR = exp(estimate),
-         lower_ci = OR - std.error*1.96,
-         upper_ci = OR + std.error*1.96) %>%
+         lower_ci = exp(estimate - std.error*1.96),
+         upper_ci = exp(estimate + std.error*1.96)) %>%
   select(term, OR, lower_ci, upper_ci) %>% 
   filter(term == "victim_sexMale") %>% 
   knitr::kable(digits = 3) 
@@ -177,7 +177,7 @@ Then, the idea is to take out non-significant variables one at a time starting w
 
 ```{r}
 # The best model using backward elimination
-best_mlr = step(mult.fit, direction='backward')
+best_mlr = step(mult.fit, direction='both')
 
 # Tidy the model and display the result in dataframe
 backward_selection = best_mlr %>% 
@@ -203,11 +203,43 @@ residual_plot = brw_clean %>%
 residual_plot
 ```
 
-
+Split train and test dataset
 ```{r}
-# One using length at birth and gestational age as predictors (main effects only)
-model1 = lm(btw ~ blength + gaweeks, data = brw_clean)
-# One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
-model2 = lm(btw ~ bhead + blength + babysex , data = brw_clean)
+cv_df =
+  crossv_mc(brw_clean, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
 ```
+
+fit models to training data and obtain corresponding RMSEs for the testing data
+```{r}
+cv_df = cv_df %>%  
+  mutate(
+    model1  = map(train, ~lm(bwt ~ blength + gaweeks,data = .x)),
+    model2  = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x)),
+    model3  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + 
+    mheight + mrace + parity + ppwt + smoken, data = .x))) %>% 
+  mutate(
+    rmse_1 = map2_dbl(model1, test, ~rmse(model = .x, data = .y)),
+    rmse_2 = map2_dbl(model2, test, ~rmse(model = .x, data = .y)),
+    rmse_3 = map2_dbl(model3, test, ~rmse(model = .x, data = .y)))
+```
+
+plot the prediction error distribution for each candidate model
+```{r}
+plot = cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+plot
+```
+
+
+We can see from the violin plot that model 3 has the smallest RMSE, which means that my selected model has the highest accuracy among three tested models.
 
