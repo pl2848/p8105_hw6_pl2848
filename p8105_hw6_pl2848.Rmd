@@ -104,6 +104,8 @@ logistic_reg_city_state
 ```
 
 Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
+
+The boxplot shows adjusted ORs and 95% of each city in the US. New York has lowest adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed, while Albuquerque has the high odds ratio.  Most of the cities have odds ratio smaller than 1. Fresno, stockton and Albuquerque have very wide confidence interval compared with others. COnfidence interval for cities with larger ORs is also higher.
 ```{r}
 # Created the boxplot of estimated OR and its 95% CI 
 plot1 = logistic_reg_city_state %>% 
@@ -125,6 +127,8 @@ plot1
 ```
 
 
+
+
 # Problem 3
 ```{r}
 # Import the data
@@ -143,7 +147,7 @@ unique(birthweight$pnumlbw)
 unique(birthweight$pnumsga)
 ```
 
-To determine which variables should be included into my regression model, I make the corelation matrix and displayed it via heat map.
+To get an overview of coeffienits between variables, I make the corelation matrix and displayed it via heat map.
 ```{r}
 # correlation plot. Deleted two variables that only have one unique value.
 correlation_plot = birthweight %>% 
@@ -173,11 +177,13 @@ mult.fit = lm(bwt ~ ., data = brw_clean)
 summary(mult.fit)
 ```
 
-Then, the idea is to take out non-significant variables one at a time starting with the highest p-value. Here, I use one function to help me to do it. I think the best_mlr makes sense, because the variables that have low correlations are excluded and the remaining variables are all reasonable and could have potential effect to body weight. So I decided to use the result from backwards elimination as my prediction model.
+Then, the idea is to take out non-significant variables one at a time starting with the highest p-value (But I used AIC instead). Here, I use one function to help me to do it. 
+
+I think the best_mlr makes sense, because the variables that have low correlations are excluded and the remaining variables are all reasonable and could have potential effect to body weight. So I decided to use the result from backwards elimination as my prediction model.
 
 ```{r}
 # The best model using backward elimination
-best_mlr = step(mult.fit, direction='both')
+best_mlr = step(mult.fit, direction='both', scope = formula(mult.fit))
 
 # Tidy the model and display the result in dataframe
 backward_selection = best_mlr %>% 
@@ -202,6 +208,7 @@ residual_plot = brw_clean %>%
 
 residual_plot
 ```
+To compare my model to the other two, I first:
 
 Split train and test dataset
 ```{r}
@@ -212,7 +219,7 @@ cv_df =
     test = map(test, as_tibble))
 ```
 
-fit models to training data and obtain corresponding RMSEs for the testing data
+ad then fit models to training data and obtain corresponding RMSEs for the testing data
 ```{r}
 cv_df = cv_df %>%  
   mutate(
@@ -226,7 +233,7 @@ cv_df = cv_df %>%
     rmse_3 = map2_dbl(model3, test, ~rmse(model = .x, data = .y)))
 ```
 
-plot the prediction error distribution for each candidate model
+Lastly, I plot the prediction error distribution for each candidate model
 ```{r}
 plot = cv_df %>% 
   select(starts_with("rmse")) %>% 
