@@ -215,7 +215,7 @@ correlation_plot
 
 According to the heat map, the variables that have relatively high correlation to bwt are: blength, bhead, gaweeks. 
 
-Since I want to use a mlr model and our x is less than 20 (not that much), I can use backward elimination to get the optimal model.
+Since I want to use a mlr model and our x is less than 20 (but still a lot), so I can use stepwise selection to get the optimal model.
 
 First, I fit regression using all variables
 ```{r}
@@ -232,19 +232,27 @@ mult.fit = lm(bwt ~ ., data = brw_clean)
 summary(mult.fit)
 ```
 
-Then, the idea is to take out non-significant variables one at a time starting with the highest p-value (But I used AIC instead). Here, I use one function to help me to do it. 
+Then, the idea is to combine forward and backward selction based on AIC. Here, I use one function to help me to do it. 
 
+The call modelis:
+
+Call:
+
+lm(formula = bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken, data = brw_clean)
+    
+    
 I think the best_mlr makes sense, because the variables that have low correlations are excluded and the remaining variables are all reasonable and could have potential effect to body weight. So I decided to use the result from backwards elimination as my prediction model.
 
 ```{r}
-# The best model using backward elimination
+# The best model using stepwise selection
 best_mlr = step(mult.fit, direction='both', scope = formula(mult.fit))
-
+best_mlr
 # Tidy the model and display the result in dataframe
-backward_selection = best_mlr %>% 
+stepwise_selection = best_mlr %>% 
+  summary() %>% 
   broom::tidy()
 
-backward_selection
+stepwise_selection
 ```
 
 show a plot of model residuals against fitted values - use add_predictions and add_residuals in making this plot.
@@ -280,8 +288,7 @@ cv_df = cv_df %>%
   mutate(
     model1  = map(train, ~lm(bwt ~ blength + gaweeks,data = .x)),
     model2  = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x)),
-    model3  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + 
-    mheight + mrace + parity + ppwt + smoken, data = .x))) %>% 
+    model3  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken, data = .x))) %>% 
   mutate(
     rmse_1 = map2_dbl(model1, test, ~rmse(model = .x, data = .y)),
     rmse_2 = map2_dbl(model2, test, ~rmse(model = .x, data = .y)),
